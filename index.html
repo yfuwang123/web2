@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>译林版五年级上册单词背诵 v2</title>
+<style>
+* { box-sizing: border-box; }
+body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; background:#f5f7fb; color:#222; }
+#app { max-width: 720px; margin: 0 auto; padding: 12px; }
+h1 { font-size: 18px; text-align:center; margin: 8px 0; }
+
+.unit-tabs { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 12px; }
+.unit-tabs button {
+  padding:7px 12px; border:2px solid #dce3f0; border-radius:20px;
+  background:#fff; font-size:13px; cursor:pointer; white-space:nowrap;
+}
+.unit-tabs button.active { background:#4c7cf3; color:#fff; border-color:#4c7cf3; }
+
+.mode-tabs { display:flex; gap:8px; margin-bottom:12px; }
+.mode-tabs button { flex:1; padding:10px; border:0; border-radius:10px; background:#e8edf7; font-size:15px; cursor:pointer; }
+.mode-tabs button.active { background:#4c7cf3; color:#fff; }
+
+.panel { background:#fff; border-radius:14px; padding:14px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
+.match-area { position:relative; display:flex; gap:12px; }
+.col { flex:1; display:flex; flex-direction:column; gap:8px; }
+
+.item {
+  display:flex; align-items:center; justify-content:space-between; gap:6px;
+  width:100%; padding:8px 10px; border:2px solid #dce3f0; border-radius:10px;
+  background:#fff; font-size:15px; cursor:pointer; user-select:none;
+  -webkit-tap-highlight-color: transparent;
+}
+.item.selected { border-color:#4c7cf3; background:#eef4ff; }
+.item.matched { border-color:#4caf50; background:#e8f5e9; color:#2e7d32; }
+.item.wrong { border-color:#f44336; background:#ffebee; animation: shake .3s; }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+
+.word-box { display:flex; flex-direction:column; justify-content:center; min-width:0; }
+.word-en { font-size:15px; line-height:1.2; word-break:break-word; }
+.word-phonetic { font-size:10px; color:#8a93a6; line-height:1.3; margin-top:2px; word-break:break-word; }
+.item.matched .word-phonetic { color:#66a06a; }
+
+.speak {
+  flex:0 0 auto; width:30px; height:30px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:#eef4ff; font-size:14px; line-height:1; cursor:pointer;
+}
+.speak:active { background:#d6e4ff; }
+.speak.playing { background:#4c7cf3; color:#fff; }
+
+#lineSvg { position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+input[type="text"] { width:100%; padding:14px; font-size:20px; border:2px solid #dce3f0; border-radius:10px; outline:none; text-align:center; letter-spacing:2px; }
+input.ok { border-color:#4caf50; background:#f1f8e9; }
+input.err { border-color:#f44336; background:#ffebee; }
+button.action { padding:10px 16px; border:0; border-radius:10px; background:#4c7cf3; color:#fff; font-size:15px; margin-top:10px; cursor:pointer; }
+button.action.gray { background:#888; }
+.msg { min-height:24px; font-size:14px; color:#555; }
+.big { font-size:26px; font-weight:700; text-align:center; margin:16px 0 6px; }
+.phonetic { text-align:center; color:#777; margin-bottom:12px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>译林版五年级上册单词背诵 <span style="font-size:12px;color:#999;">v2</span></h1>
+
+  <div class="unit-tabs" id="unitTabs"></div>
+
+  <div class="mode-tabs">
+    <button data-mode="match" class="active">认识连线</button>
+    <button data-mode="spell">拼写输入</button>
+  </div>
+
+  <div id="matchPanel" class="panel">
+    <div id="matchArea" class="match-area">
+      <div class="col" id="leftCol"></div>
+      <div class="col" id="rightCol"></div>
+      <svg id="lineSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+    <p id="matchMsg" class="msg"></p>
+    <button id="resetMatch" class="action">重来</button>
+  </div>
+
+  <div id="spellPanel" class="panel" style="display:none">
+    <p id="spellProgress" class="msg"></p>
+    <div id="spellZh" class="big"></div>
+    <div id="spellPhonetic" class="phonetic"></div>
+    <input id="spellInput" type="text" autocomplete="off" autocapitalize="off" placeholder="输入英文拼写">
+    <p id="spellMsg" class="msg"></p>
+    <button id="nextSpell" class="action">下一题</button>
+    <button id="resetSpell" class="action gray">重来</button>
+  </div>
+</div>
+
+<script>
+// ===== 1. 分单元单词数据 =====
+var UNITS = [
+  {
+    name: 'U1 金发姑娘',
+    words: [
+      { en: 'bear', zh: '熊', phonetic: '/beə(r)/' },
+      { en: 'forest', zh: '森林', phonetic: '/ˈfɒrɪst/' },
+      { en: 'there', zh: '有（与be连用）', phonetic: '/ðeə(r)/' },
+      { en: 'house', zh: '房子', phonetic: '/haʊs/' },
+      { en: 'soup', zh: '汤', phonetic: '/suːp/' },
+      { en: 'just right', zh: '正合适', phonetic: '/dʒʌst raɪt/' },
+      { en: 'room', zh: '房间', phonetic: '/ruːm/' },
+      { en: 'hard', zh: '硬的', phonetic: '/hɑːd/' },
+      { en: 'soft', zh: '柔软的', phonetic: '/sɔːft/' },
+      { en: 'afraid', zh: '害怕的', phonetic: '/əˈfreɪd/' },
+      { en: 'in front of', zh: '在……前面', phonetic: '/ɪn frʌnt ɒv/' },
+      { en: 'her', zh: '她；她的', phonetic: '/hə(r)/' },
+      { en: 'Help!', zh: '救命啊！', phonetic: '' },
+      { en: 'beside', zh: '在……旁边', phonetic: '/bɪˈsaɪd/' },
+      { en: 'between', zh: '在……中间', phonetic: '/bɪˈtwiːn/' },
+      { en: 'really', zh: '真的', phonetic: '/ˈriːəli/' },
+      { en: 'then', zh: '然后', phonetic: '/ðen/' },
+      { en: 'find', zh: '找到', phonetic: '/faɪnd/' },
+      { en: 'their', zh: '他们的', phonetic: '/ðeə(r)/' }
+    ]
+  },
+  {
+    name: 'U2 新同学',
+    words: [
+      { en: 'student', zh: '学生', phonetic: '/ˈstjuːdnt/' },
+      { en: 'show around', zh: '带……参观', phonetic: '/ʃəʊ əˈraʊnd/' },
+      { en: 'classroom', zh: '教室', phonetic: '/ˈklɑːsruːm/' },
+      { en: 'second', zh: '第二', phonetic: '/ˈsekənd/' },
+      { en: 'floor', zh: '楼层', phonetic: '/flɔː(r)/' },
+      { en: 'computer', zh: '电脑', phonetic: '/kəmˈpjuːtə(r)/' },
+      { en: 'third', zh: '第三', phonetic: '/θɜːd/' },
+      { en: 'first', zh: '第一', phonetic: '/fɜːst/' },
+      { en: 'swing', zh: '秋千', phonetic: '/swɪŋ/' },
+      { en: 'push', zh: '推', phonetic: '/pʊʃ/' },
+      { en: 'heavy', zh: '重的', phonetic: '/ˈhevi/' },
+      { en: 'stop', zh: '停下', phonetic: '/stɒp/' },
+      { en: 'high', zh: '高的', phonetic: '/haɪ/' },
+      { en: 'great', zh: '很多的', phonetic: '/ɡreɪt/' }
+    ]
+  },
+  {
+    name: 'U3 动物朋友',
+    words: [
+      { en: 'body', zh: '身体', phonetic: '/ˈbɒdi/' },
+      { en: 'no', zh: '没有', phonetic: '/nəʊ/' },
+      { en: 'leg', zh: '腿', phonetic: '/leɡ/' },
+      { en: 'or', zh: '也不', phonetic: '/ɔː(r)/' },
+      { en: 'arm', zh: '手臂', phonetic: '/ɑːm/' },
+      { en: 'wing', zh: '翅膀', phonetic: '/wɪŋ/' },
+      { en: 'foot', zh: '脚', phonetic: '/fʊt/' },
+      { en: 'rabbit', zh: '兔子', phonetic: '/ˈræbɪt/' },
+      { en: 'give', zh: '给', phonetic: '/ɡɪv/' },
+      { en: 'finger', zh: '手指', phonetic: '/ˈfɪŋɡə(r)/' }
+    ]
+  },
+  {
+    name: 'U4 爱好',
+    words: [
+      { en: 'hobby', zh: '业余爱好', phonetic: '/ˈhɒbi/' },
+      { en: 'be good at', zh: '擅长', phonetic: '/bi ɡʊd æt/' },
+      { en: 'with', zh: '与……一起', phonetic: '/wɪð/' },
+      { en: 'also', zh: '也', phonetic: '/ˈɔːlsəʊ/' },
+      { en: 'read', zh: '读', phonetic: '/riːd/' },
+      { en: 'story', zh: '故事', phonetic: '/ˈstɔːri/' },
+      { en: 'a lot of', zh: '很多', phonetic: '/ə lɒt ɒv/' },
+      { en: 'dance', zh: '跳舞', phonetic: '/dɑːns/' },
+      { en: 'both', zh: '两个都', phonetic: '/bəʊθ/' },
+      { en: 'sing', zh: '唱歌', phonetic: '/sɪŋ/' },
+      { en: 'group', zh: '组', phonetic: '/ɡruːp/' },
+      { en: 'about', zh: '关于', phonetic: '/əˈbaʊt/' },
+      { en: 'idea', zh: '主意', phonetic: '/aɪˈdɪə/' },
+      { en: 'ice', zh: '冰', phonetic: '/aɪs/' }
+    ]
+  },
+  {
+    name: 'U5 职业',
+    words: [
+      { en: 'teacher', zh: '老师', phonetic: '/ˈtiːtʃə(r)/' },
+      { en: 'teach', zh: '教', phonetic: '/tiːtʃ/' },
+      { en: 'writer', zh: '作家', phonetic: '/ˈraɪtə(r)/' },
+      { en: 'write', zh: '写', phonetic: '/raɪt/' },
+      { en: 'work', zh: '工作', phonetic: '/wɜːk/' },
+      { en: 'doctor', zh: '医生', phonetic: '/ˈdɒktə(r)/' },
+      { en: 'help', zh: '帮助', phonetic: '/help/' },
+      { en: 'sick', zh: '生病的', phonetic: '/sɪk/' },
+      { en: 'people', zh: '人；人们', phonetic: '/ˈpiːpl/' },
+      { en: 'factory', zh: '工厂', phonetic: '/ˈfæktri/' },
+      { en: 'worker', zh: '工人', phonetic: '/ˈwɜːkə(r)/' },
+      { en: 'cook', zh: '厨师', phonetic: '/kʊk/' },
+      { en: 'driver', zh: '驾驶员', phonetic: '/ˈdraɪvə(r)/' },
+      { en: 'farmer', zh: '农民', phonetic: '/ˈfɑːmə(r)/' },
+      { en: 'nurse', zh: '护士', phonetic: '/nɜːs/' },
+      { en: 'policeman', zh: '警察', phonetic: '/pəˈliːsmən/' }
+    ]
+  },
+  {
+    name: 'U6 网友',
+    words: [
+      { en: 'e-friend', zh: '网友', phonetic: '/ˈiː frend/' },
+      { en: 'send', zh: '发出', phonetic: '/send/' },
+      { en: 'email', zh: '电子邮件', phonetic: '/ˈiːmeɪl/' },
+      { en: 'live', zh: '住，居住', phonetic: '/lɪv/' },
+      { en: 'UK', zh: '英国', phonetic: '/ˌjuː ˈkeɪ/' },
+      { en: 'study', zh: '学习', phonetic: '/ˈstʌdi/' },
+      { en: 'Australia', zh: '澳大利亚', phonetic: '/ɒˈstreɪliə/' },
+      { en: 'Canada', zh: '加拿大', phonetic: '/ˈkænədə/' },
+      { en: 'US', zh: '美国', phonetic: '/ˌjuː ˈes/' },
+      { en: 'China', zh: '中国', phonetic: '/ˈtʃaɪnə/' },
+      { en: 'tomorrow', zh: '明天', phonetic: '/təˈmɒrəʊ/' }
+    ]
+  },
+  {
+    name: 'U7 周末',
+    words: [
+      { en: 'visit', zh: '拜访', phonetic: '/ˈvɪzɪt/' },
+      { en: 'grandparent', zh: '祖父；祖母', phonetic: '/ˈɡrænpeərənt/' },
+      { en: 'very much', zh: '非常', phonetic: '/ˈveri mʌtʃ/' },
+      { en: 'often', zh: '经常', phonetic: '/ˈɒfn/' },
+      { en: 'chat', zh: '聊天', phonetic: '/tʃæt/' },
+      { en: 'Internet', zh: '网络', phonetic: '/ˈɪntənet/' },
+      { en: 'always', zh: '总是', phonetic: '/ˈɔːlweɪz/' },
+      { en: 'sometimes', zh: '有时', phonetic: '/ˈsʌmtaɪmz/' },
+      { en: 'early', zh: '早早地', phonetic: '/ˈɜːli/' },
+      { en: 'turkey', zh: '火鸡', phonetic: '/ˈtɜːki/' },
+      { en: 'pudding', zh: '布丁', phonetic: '/ˈpʊdɪŋ/' },
+      { en: 'have a good time', zh: '过得愉快', phonetic: '/hæv ə ɡʊd taɪm/' }
+    ]
+  },
+  {
+    name: 'U8 圣诞节',
+    words: [
+      { en: 'card', zh: '卡片', phonetic: '/kɑːd/' },
+      { en: 'Christmas', zh: '圣诞节', phonetic: '/ˈkrɪsməs/' },
+      { en: 'children', zh: '孩子', phonetic: '/ˈtʃɪldrən/' },
+      { en: 'buy', zh: '买', phonetic: '/baɪ/' },
+      { en: 'message', zh: '信息', phonetic: '/ˈmesɪdʒ/' },
+      { en: 'present', zh: '礼物', phonetic: '/ˈpreznt/' },
+      { en: 'song', zh: '歌曲', phonetic: '/sɒŋ/' },
+      { en: 'next', zh: '接着，然后', phonetic: '/nekst/' },
+      { en: 'put', zh: '放', phonetic: '/pʊt/' },
+      { en: 'him', zh: '他', phonetic: '/hɪm/' },
+      { en: 'pretty', zh: '漂亮的', phonetic: '/ˈprɪti/' },
+      { en: 'us', zh: '我们', phonetic: '/ʌs/' },
+      { en: 'thing', zh: '物品，东西', phonetic: '/θɪŋ/' }
+    ]
+  },
+  {
+    name: '新U1 好习惯',
+    words: [
+      { en: 'habit', zh: '习惯', phonetic: '/ˈhæbɪt/' },
+      { en: 'do exercise', zh: '锻炼', phonetic: '/duː ˈeksəsaɪz/' },
+      { en: 'listen', zh: '听', phonetic: '/ˈlɪsn/' },
+      { en: 'carefully', zh: '仔细地', phonetic: '/ˈkeəfəli/' },
+      { en: 'take notes', zh: '记笔记', phonetic: '/teɪk nəʊts/' },
+      { en: 'tidy', zh: '整洁的', phonetic: '/ˈtaɪdi/' },
+      { en: 'never', zh: '从不', phonetic: '/ˈnevə(r)/' },
+      { en: 'in class', zh: '在课堂上', phonetic: '/ɪn klɑːs/' },
+      { en: 'bad', zh: '坏的', phonetic: '/bæd/' },
+      { en: 'healthy', zh: '健康的', phonetic: '/ˈhelθi/' },
+      { en: 'late', zh: '迟，晚', phonetic: '/leɪt/' },
+      { en: 'health', zh: '健康', phonetic: '/helθ/' }
+    ]
+  },
+  {
+    name: '新U2 感觉好',
+    words: [
+      { en: 'worried', zh: '担心的', phonetic: '/ˈwʌrid/' },
+      { en: 'excited', zh: '激动的', phonetic: '/ɪkˈsaɪtɪd/' },
+      { en: 'hard', zh: '努力地', phonetic: '/hɑːd/' },
+      { en: 'like', zh: '例如', phonetic: '/laɪk/' },
+      { en: 'hear', zh: '听见', phonetic: '/hɪə(r)/' },
+      { en: 'teach', zh: '教授', phonetic: '/tiːtʃ/' },
+      { en: 'word', zh: '单词', phonetic: '/wɜːd/' },
+      { en: 'write', zh: '书写', phonetic: '/raɪt/' },
+      { en: 'understand', zh: '理解', phonetic: '/ˌʌndəˈstænd/' },
+      { en: 'hand', zh: '手', phonetic: '/hænd/' },
+      { en: 'give up', zh: '放弃', phonetic: '/ɡɪv ʌp/' },
+      { en: 'fast', zh: '快', phonetic: '/fɑːst/' },
+      { en: 'speak', zh: '说话', phonetic: '/spiːk/' },
+      { en: 'know', zh: '知道', phonetic: '/nəʊ/' }
+    ]
+  }
+];
+
+// ===== 2. 工具 =====
+function $(id) { return document.getElementById(id); }
+function shuffle(arr) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+
+// ===== 3. ★ v2 核心修复：发音 =====
+// 方案A：在线 TTS 音频（有道词典接口，返回 MP3，手机浏览器最稳）
+// 方案B：系统语音合成 speechSynthesis（作为兜底）
+var currentAudio = null;
+var ttsBroken = false;   // 如果在线 TTS 连续失败，自动切换本地合成
+
+function speak(text, btn) {
+  if (!text) return;
+
+  // 如果之前在线 TTS 失败过，直接用本地合成
+  if (ttsBroken) {
+    speakLocal(text, btn);
+    return;
+  }
+
+  // 方案A：在线音频
+  try {
+    // 停止上一次播放
+    if (currentAudio) {
+      try { currentAudio.pause(); } catch (e) {}
+      currentAudio = null;
+    }
+
+    var url = 'https://dict.youdao.com/dictvoice?audio=' +
+              encodeURIComponent(text) + '&type=2';
+
+    var audio = new Audio();
+    audio.preload = 'auto';
+    audio.src = url;
+    currentAudio = audio;
+
+    // 播放状态动画
+    if (btn) btn.classList.add('playing');
+    var clearPlaying = function () {
+      if (btn) btn.classList.remove('playing');
+    };
+    audio.onended = clearPlaying;
+    audio.onerror = function () {
+      clearPlaying();
+      // 在线音频加载失败 → 回退本地合成
+      ttsBroken = true;
+      speakLocal(text, btn);
+    };
+
+    var p = audio.play();
+    if (p && p.catch) {
+      p.catch(function () {
+        clearPlaying();
+        // 播放被拒绝 → 回退本地合成
+        speakLocal(text, btn);
+      });
+    }
+  } catch (e) {
+    speakLocal(text, btn);
+  }
+}
+
+// 方案B：本地语音合成（兜底）
+function speakLocal(text, btn) {
+  try {
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US';
+    u.rate = 0.75;
+    if (btn) {
+      btn.classList.add('playing');
+      u.onend = function () { btn.classList.remove('playing'); };
+      u.onerror = function () { btn.classList.remove('playing'); };
+    }
+    window.speechSynthesis.speak(u);
+  } catch (e) {
+    if (btn) btn.classList.remove('playing');
+  }
+}
+
+// 首次用户手势时"解锁"音频（部分手机需要）
+function unlockAudio() {
+  try {
+    var a = new Audio();
+    a.src = 'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA';
+    a.volume = 0;
+    a.play().catch(function () {});
+  } catch (e) {}
+  document.removeEventListener('touchstart', unlockAudio);
+  document.removeEventListener('click', unlockAudio);
+}
+document.addEventListener('touchstart', unlockAudio, { once: true });
+document.addEventListener('click', unlockAudio, { once: true });
+
+// ===== 4. 全局状态 =====
+var currentUnit = 0;
+var currentMode = 'match';
+
+// ===== 5. 单元标签 =====
+function renderUnitTabs() {
+  var bar = $('unitTabs');
+  bar.innerHTML = '';
+  for (var i = 0; i < UNITS.length; i++) {
+    (function (idx) {
+      var btn = document.createElement('button');
+      btn.textContent = UNITS[idx].name;
+      if (idx === currentUnit) btn.classList.add('active');
+      btn.onclick = function () {
+        currentUnit = idx;
+        renderUnitTabs();
+        if (currentMode === 'match') initMatch();
+        else initSpell();
+      };
+      bar.appendChild(btn);
+    })(i);
+  }
+}
+
+function getWords() {
+  return UNITS[currentUnit].words;
+}
+
+// ===== 6. 连线模式 =====
+var leftSelected = null;
+var matchedCount = 0;
+
+function initMatch() {
+  var words = getWords();
+  var leftCol = $('leftCol');
+  var rightCol = $('rightCol');
+  var lineSvg = $('lineSvg');
+  var matchMsg = $('matchMsg');
+
+  leftSelected = null;
+  matchedCount = 0;
+  leftCol.innerHTML = '';
+  rightCol.innerHTML = '';
+  lineSvg.innerHTML = '';
+  matchMsg.textContent = '';
+
+  var leftList = shuffle(words);
+  for (var i = 0; i < leftList.length; i++) {
+    (function (w) {
+      var div = document.createElement('div');
+      div.className = 'item';
+
+      var box = document.createElement('div');
+      box.className = 'word-box';
+
+      var enEl = document.createElement('div');
+      enEl.className = 'word-en';
+      enEl.textContent = w.en;
+      box.appendChild(enEl);
+
+      var phEl = document.createElement('div');
+      phEl.className = 'word-phonetic';
+      phEl.textContent = w.phonetic || '';
+      box.appendChild(phEl);
+
+      div.appendChild(box);
+
+      var sp = document.createElement('span');
+      sp.className = 'speak';
+      sp.textContent = '🔊';
+      sp.onclick = function (e) {
+        e.stopPropagation();
+        speak(w.en, sp);
+      };
+      div.appendChild(sp);
+
+      div.onclick = function () { selectLeft(div, w.en, sp); };
+      leftCol.appendChild(div);
+    })(leftList[i]);
+  }
+
+  var rightList = shuffle(words);
+  for (var j = 0; j < rightList.length; j++) {
+    (function (w) {
+      var div = document.createElement('div');
+      div.className = 'item';
+      div.style.justifyContent = 'center';
+      div.textContent = w.zh;
+      div.onclick = function () { selectRight(div, w.zh); };
+      rightCol.appendChild(div);
+    })(rightList[j]);
+  }
+}
+
+function selectLeft(el, en, speakBtn) {
+  if (el.classList.contains('matched')) return;
+  var all = document.querySelectorAll('#leftCol .item');
+  for (var i = 0; i < all.length; i++) all[i].classList.remove('selected');
+  el.classList.add('selected');
+  leftSelected = { btn: el, en: en };
+  speak(en, speakBtn);
+}
+
+function selectRight(el, zh) {
+  if (!leftSelected || el.classList.contains('matched')) return;
+  var words = getWords();
+  var ok = false;
+  for (var i = 0; i < words.length; i++) {
+    if (words[i].en === leftSelected.en && words[i].zh === zh) { ok = true; break; }
+  }
+  if (ok) {
+    leftSelected.btn.classList.remove('selected');
+    leftSelected.btn.classList.add('matched');
+    el.classList.add('matched');
+    drawLine(leftSelected.btn, el);
+    matchedCount++;
+    $('matchMsg').textContent = '✅ 正确！已连对 ' + matchedCount + '/' + words.length;
+    leftSelected = null;
+    if (matchedCount === words.length) $('matchMsg').textContent = '🎉 全部连对！';
+  } else {
+    el.classList.add('wrong');
+    setTimeout(function () { el.classList.remove('wrong'); }, 400);
+    $('matchMsg').textContent = '❌ 再想想';
+  }
+}
+
+function drawLine(a, b) {
+  try {
+    var matchArea = $('matchArea');
+    var lineSvg = $('lineSvg');
+    var areaRect = matchArea.getBoundingClientRect();
+    var ar = a.getBoundingClientRect();
+    var br = b.getBoundingClientRect();
+    var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', ar.right - areaRect.left);
+    line.setAttribute('y1', ar.top + ar.height / 2 - areaRect.top);
+    line.setAttribute('x2', br.left - areaRect.left);
+    line.setAttribute('y2', br.top + br.height / 2 - areaRect.top);
+    line.setAttribute('stroke', '#4caf50');
+    line.setAttribute('stroke-width', '3');
+    line.setAttribute('stroke-linecap', 'round');
+    lineSvg.appendChild(line);
+  } catch (e) {}
+}
+
+// ===== 7. 拼写模式 =====
+var spellIndex = 0;
+var spellScore = 0;
+var spellLocked = false;
+
+function initSpell() {
+  spellIndex = 0;
+  spellScore = 0;
+  spellLocked = false;
+  showSpell();
+}
+
+function showSpell() {
+  var words = getWords();
+  var input = $('spellInput');
+  if (spellIndex >= words.length) {
+    $('spellProgress').textContent = '完成！得分 ' + spellScore + '/' + words.length;
+    $('spellZh').textContent = '🎉 全部完成';
+    $('spellPhonetic').textContent = '';
+    input.value = '';
+    input.disabled = true;
+    $('spellMsg').textContent = '';
+    return;
+  }
+  var w = words[spellIndex];
+  $('spellProgress').textContent = '第 ' + (spellIndex + 1) + '/' + words.length + ' 题，得分 ' + spellScore;
+  $('spellZh').textContent = w.zh;
+  $('spellPhonetic').textContent = w.phonetic || '';
+  input.disabled = false;
+  input.value = '';
+  input.classList.remove('ok');
+  input.classList.remove('err');
+  $('spellMsg').textContent = '';
+  spellLocked = false;
+  try { input.focus(); } catch (e) {}
+}
+
+function bindSpellInput() {
+  var input = $('spellInput');
+  input.addEventListener('input', function () {
+    if (spellLocked) return;
+    var words = getWords();
+    var w = words[spellIndex];
+    if (!w) return;
+    var val = input.value.trim().toLowerCase();
+    var answer = w.en.toLowerCase();
+
+    if (val.length === 0) {
+      input.classList.remove('ok');
+      input.classList.remove('err');
+    } else if (answer.indexOf(val) === 0) {
+      input.classList.add('ok');
+      input.classList.remove('err');
+    } else {
+      input.classList.add('err');
+      input.classList.remove('ok');
+    }
+
+    if (val === answer) {
+      spellLocked = true;
+      spellScore++;
+      $('spellMsg').textContent = '✅ 正确！';
+      input.classList.add('ok');
+      input.classList.remove('err');
+      // ★ v2：拼对后读一遍标准发音
+      speak(w.en);
+      setTimeout(function () { spellIndex++; showSpell(); }, 700);
+    }
+  });
+}
+
+// ===== 8. 模式切换 =====
+function bindModeTabs() {
+  var btns = document.querySelectorAll('.mode-tabs button');
+  for (var i = 0; i < btns.length; i++) {
+    (function (btn) {
+      btn.onclick = function () {
+        var all = document.querySelectorAll('.mode-tabs button');
+        for (var k = 0; k < all.length; k++) all[k].classList.remove('active');
+        btn.classList.add('active');
+        currentMode = btn.getAttribute('data-mode');
+        $('matchPanel').style.display = (currentMode === 'match') ? 'block' : 'none';
+        $('spellPanel').style.display = (currentMode === 'spell') ? 'block' : 'none';
+        if (currentMode === 'match') initMatch();
+        else initSpell();
+      };
+    })(btns[i]);
+  }
+}
+
+// ===== 9. 启动 =====
+window.onload = function () {
+  renderUnitTabs();
+  bindModeTabs();
+  bindSpellInput();
+  initMatch();
+  initSpell();
+  $('resetMatch').onclick = initMatch;
+  $('resetSpell').onclick = initSpell;
+  $('nextSpell').onclick = function () {
+    var words = getWords();
+    if (spellIndex < words.length) { spellIndex++; showSpell(); }
+  };
+};
+</script>
+</body>
+</html>
